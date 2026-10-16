@@ -1,0 +1,1946 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<title>Разбуди его</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,400&family=Montserrat:wght@300;400;500&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@vkontakte/vk-bridge@2/dist/browser.min.js"></script>
+<style>
+:root {
+  --bg: #050810;
+  --paper: #ede4d2;
+  --paper-dim: rgba(237, 228, 210, 0.55);
+  --paper-faint: rgba(237, 228, 210, 0.25);
+  --accent: #d4a76a;
+  --accent-bright: #eec88a;
+  --frost: #c8dae8;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  width: 100%; height: 100dvh; overflow: hidden;
+  background: var(--bg);
+  color: var(--paper);
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  user-select: none; -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  touch-action: none;
+  font-feature-settings: "liga", "kern";
+  -webkit-font-smoothing: antialiased;
+}
+
+#canvas {
+  position: fixed; inset: 0;
+  width: 100%; height: 100%;
+  z-index: 1; display: block;
+}
+
+.bg-layer {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse at 50% 100%, rgba(30, 45, 70, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse at 50% 0%, rgba(10, 15, 30, 0.4) 0%, transparent 60%);
+}
+.bg-warm {
+  position: fixed;
+  left: 50%; top: 38%;
+  width: 90vmin; height: 90vmin;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle,
+    rgba(212, 167, 106, 0.18) 0%,
+    rgba(212, 167, 106, 0.06) 35%,
+    transparent 65%);
+  filter: blur(40px);
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 1.5s var(--ease-out);
+}
+.bg-warm.visible { opacity: 1; }
+
+.vignette {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 30;
+  background: radial-gradient(ellipse at 50% 50%, transparent 42%, rgba(0,0,0,0.72) 100%);
+}
+.grain {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 31;
+  opacity: 0.13;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* HUD */
+.hud {
+  position: fixed;
+  top: max(1.25rem, env(safe-area-inset-top, 1.25rem));
+  left: 0; right: 0;
+  padding: 0 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.8s var(--ease-out);
+}
+.hud.visible { opacity: 1; }
+.hud > * { pointer-events: auto; }
+.brand {
+  display: flex; align-items: center; gap: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 300;
+  letter-spacing: 0.22em;
+  color: var(--paper-dim);
+  text-transform: lowercase;
+}
+.brand .brand-icon {
+  color: var(--frost);
+  opacity: 0.6;
+  transition: color 0.6s ease, opacity 0.6s ease;
+}
+.hud .brand.warm .brand-icon {
+  color: var(--accent);
+  opacity: 1;
+}
+
+/* Mic indicator — точка, пульсирует при дуновении */
+.mic-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 999px;
+  background: rgba(15, 20, 30, 0.5);
+  border: 1px solid rgba(237, 228, 210, 0.1);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--paper-faint);
+  transition: all 0.3s ease;
+}
+.mic-indicator .dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: rgba(200, 218, 232, 0.4);
+  transition: all 0.15s ease;
+}
+.mic-indicator.active .dot {
+  background: var(--accent-bright);
+  box-shadow: 0 0 10px var(--accent-bright), 0 0 20px rgba(238, 200, 138, 0.5);
+}
+.mic-indicator.active {
+  color: var(--accent-bright);
+  border-color: rgba(238, 200, 138, 0.3);
+}
+.mic-indicator .label {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.icon-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  border: 1px solid rgba(237, 228, 210, 0.12);
+  background: rgba(15, 20, 30, 0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--paper);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.icon-btn:active { transform: scale(0.92); }
+
+/* Main */
+main {
+  position: relative;
+  z-index: 10;
+  width: 100%; height: 100dvh;
+  pointer-events: none;
+}
+.stage {
+  position: absolute; inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 1.1s var(--ease-out);
+  pointer-events: none;
+}
+.stage.active { opacity: 1; pointer-events: auto; }
+
+/* Intro */
+.intro {
+  text-align: center;
+  max-width: 400px;
+  padding: 0 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2.25rem;
+  pointer-events: auto;
+}
+.intro .eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 300;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--paper-dim);
+}
+.intro h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 400;
+  font-style: italic;
+  font-size: clamp(2rem, 8vw, 3.2rem);
+  line-height: 1.15;
+  color: var(--paper);
+  letter-spacing: -0.01em;
+}
+.intro h1 .hand {
+  display: block;
+  margin-top: 0.4rem;
+  font-family: 'Caveat', cursive;
+  font-style: normal;
+  font-weight: 700;
+  font-size: clamp(2.2rem, 9vw, 3.6rem);
+  color: var(--accent-bright);
+}
+.intro .sub {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(14px, 4vw, 16px);
+  font-style: italic;
+  font-weight: 300;
+  color: var(--paper-dim);
+  line-height: 1.7;
+  max-width: 300px;
+}
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 30px;
+  border: 1px solid rgba(212, 167, 106, 0.4);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--paper);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.5s var(--ease-out);
+  position: relative;
+  overflow: hidden;
+}
+.cta::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(212, 167, 106, 0.18), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.cta:hover::before, .cta:active::before { opacity: 1; }
+.cta:hover, .cta:active {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.cta .arrow { transition: transform 0.4s var(--ease-out); }
+.cta:hover .arrow, .cta:active .arrow { transform: translateX(4px); }
+
+/* Bloom stage */
+#stage-bloom {
+  justify-content: flex-end;
+  padding-bottom: max(3rem, env(safe-area-inset-bottom, 3rem));
+}
+.lines {
+  position: absolute;
+  top: 62%;
+  left: 0; right: 0;
+  padding: 0 1.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  pointer-events: none;
+  z-index: 15;
+}
+.line {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 400;
+  font-style: italic;
+  font-size: clamp(15px, 4.2vw, 18px);
+  line-height: 1.55;
+  color: rgba(237, 228, 210, 0.94);
+  letter-spacing: 0.005em;
+  text-align: center;
+  max-width: 340px;
+  opacity: 0;
+  transform: translateY(8px);
+  filter: blur(4px);
+  transition:
+    opacity 1.6s var(--ease-out),
+    transform 1.6s var(--ease-out),
+    filter 1.6s var(--ease-out),
+    color 1.6s ease;
+  text-shadow: 0 0 20px rgba(212, 167, 106, 0.15);
+}
+.line.revealed {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+.line.final {
+  color: var(--accent-bright);
+  text-shadow: 0 0 30px rgba(238, 200, 138, 0.5);
+}
+
+.dots {
+  position: absolute;
+  left: 50%;
+  bottom: max(5.5rem, env(safe-area-inset-bottom, 5.5rem));
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  opacity: 0;
+  transition: opacity 0.9s var(--ease-out) 0.5s;
+  pointer-events: none;
+}
+.dots.visible { opacity: 1; }
+.dots .dot {
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: rgba(237, 228, 210, 0.18);
+  transition: all 0.9s var(--ease-out);
+}
+.dots .dot.lit {
+  background: var(--accent);
+  box-shadow:
+    0 0 8px rgba(212, 167, 106, 0.8),
+    0 0 16px rgba(212, 167, 106, 0.35);
+  transform: scale(1.35);
+}
+
+/* Hint */
+.hint {
+  position: fixed;
+  left: 50%;
+  bottom: max(2rem, env(safe-area-inset-bottom, 2rem));
+  transform: translateX(-50%) translateY(10px);
+  padding: 10px 22px;
+  border-radius: 999px;
+  background: rgba(15, 20, 30, 0.6);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(237, 228, 210, 0.08);
+  color: var(--paper);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  font-weight: 300;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  z-index: 45;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.8s ease, transform 0.8s var(--ease-out);
+}
+.hint.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+.hint .accent { color: var(--accent-bright); }
+
+/* ============ Modal ============ */
+.modal {
+  position: fixed; inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(4, 3, 6, 0.78);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s ease;
+}
+.modal.open { opacity: 1; pointer-events: auto; }
+.modal-card {
+  width: 100%;
+  max-width: 360px;
+  padding: 2.5rem 2rem 2rem;
+  border-radius: 4px;
+  background: linear-gradient(160deg, #14100e 0%, #0e0a0c 100%);
+  border: 1px solid rgba(237, 228, 210, 0.08);
+  box-shadow:
+    0 40px 100px rgba(0, 0, 0, 0.85),
+    0 0 80px rgba(212, 167, 106, 0.08);
+  text-align: center;
+  transform: translateY(20px);
+  transition: transform 0.6s var(--ease-out);
+}
+.modal.open .modal-card { transform: translateY(0); }
+.modal-card .eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--paper-faint);
+  margin-bottom: 1.25rem;
+}
+.modal-card h3 {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 400;
+  font-style: italic;
+  font-size: 1.5rem;
+  color: var(--paper);
+  margin-bottom: 1rem;
+  line-height: 1.35;
+}
+.modal-card p {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 14px;
+  font-weight: 300;
+  color: var(--paper-dim);
+  line-height: 1.7;
+  margin-bottom: 1.75rem;
+}
+.modal-card .small {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--paper-faint);
+  letter-spacing: 0.1em;
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+.modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.btn-solid {
+  padding: 14px 24px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, #d4a76a 0%, #b88a4a 100%);
+  color: #1a1208;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.4s var(--ease-out);
+  box-shadow: 0 8px 24px rgba(212, 167, 106, 0.25);
+}
+.btn-solid:hover, .btn-solid:active {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 32px rgba(212, 167, 106, 0.4);
+}
+.btn-outline {
+  padding: 13px 24px;
+  border-radius: 999px;
+  border: 1px solid rgba(237, 228, 210, 0.15);
+  background: transparent;
+  color: var(--paper-dim);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  font-weight: 300;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.btn-outline:hover, .btn-outline:active {
+  border-color: rgba(237, 228, 210, 0.35);
+  color: var(--paper);
+}
+.modal-calibration {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1rem 0;
+}
+.calib-ring {
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  border: 2px solid rgba(212, 167, 106, 0.2);
+  border-top-color: var(--accent-bright);
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.modal-calibration .calib-text {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 15px;
+  color: var(--paper-dim);
+  text-align: center;
+}
+
+/* Final letter */
+#stage-letter { padding: 5rem 1.5rem 2rem; }
+.letter {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  padding: 2.5rem 1.9rem 1.75rem;
+  border-radius: 4px;
+  background: linear-gradient(165deg, #f6eeda 0%, #e8dcc0 100%);
+  color: #2a2214;
+  box-shadow:
+    0 40px 100px rgba(0, 0, 0, 0.85),
+    0 0 0 1px rgba(212, 167, 106, 0.3),
+    0 0 100px rgba(212, 167, 106, 0.15);
+  transform: rotate(-0.6deg);
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 1s var(--ease-out), transform 1s var(--ease-out);
+}
+#stage-letter.active .letter {
+  opacity: 1;
+  transform: rotate(-0.6deg) translateY(0);
+}
+.letter::before {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  opacity: 0.08;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.letter-eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: #8a7250;
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+.letter-text {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 400;
+  font-size: 1.05rem;
+  line-height: 1.8;
+  color: #2a2214;
+  padding-left: 1rem;
+  border-left: 1px solid rgba(212, 167, 106, 0.6);
+  margin-bottom: 1.5rem;
+}
+.letter-text p + p {
+  margin-top: 0.9rem;
+  color: #4a3d2a;
+  font-size: 0.98rem;
+}
+.letter-sign {
+  font-family: 'Caveat', cursive;
+  font-size: 1.4rem;
+  color: #5a3a2a;
+  text-align: right;
+  margin-bottom: 1.5rem;
+}
+.letter-actions {
+  display: flex; flex-direction: column;
+  gap: 10px;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(212, 167, 106, 0.35);
+}
+.letter-actions .row { display: flex; gap: 10px; }
+.btn-dark {
+  flex: 1;
+  padding: 13px 16px;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #d4a76a 0%, #b88a4a 100%);
+  color: #1a1208;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(212, 167, 106, 0.35);
+  transition: all 0.3s ease;
+}
+.btn-dark:active { transform: translateY(-1px); }
+.btn-light {
+  flex: 1;
+  padding: 13px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(90, 58, 42, 0.25);
+  background: transparent;
+  color: #5a3a2a;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.btn-light:active { background: rgba(90, 58, 42, 0.06); }
+
+/* Save overlay */
+.save-overlay {
+  position: fixed; inset: 0;
+  z-index: 80;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 1.5rem;
+  background: rgba(2, 2, 4, 0.94);
+  backdrop-filter: blur(16px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+.save-overlay.open { opacity: 1; pointer-events: auto; }
+.save-overlay img {
+  max-width: 100%;
+  max-height: 68vh;
+  border-radius: 10px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.9);
+}
+.save-overlay .tip {
+  margin-top: 1.5rem;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--paper-dim);
+  text-align: center;
+  max-width: 280px;
+  line-height: 1.8;
+}
+.save-overlay .close {
+  margin-top: 1.5rem;
+  padding: 11px 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(237, 228, 210, 0.2);
+  background: transparent;
+  color: var(--paper);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+@media (max-height: 680px) {
+  .intro { gap: 1.5rem; }
+  .lines { top: 58%; gap: 0.5rem; }
+  .line { font-size: 14px; }
+}
+</style>
+</head>
+<body>
+
+<div class="bg-layer"></div>
+<div class="bg-warm" id="bgWarm"></div>
+<canvas id="canvas"></canvas>
+<div class="vignette"></div>
+<div class="grain"></div>
+
+<header class="hud" id="hud">
+  <div class="brand" id="brand">
+    <span class="brand-icon">❄</span>
+    <span>для тебя</span>
+    <span class="mic-indicator" id="micIndicator" style="display:none;">
+      <span class="dot"></span>
+      <span class="label" id="micLabel">слушаю</span>
+    </span>
+  </div>
+  <button class="icon-btn" id="soundBtn" onclick="toggleAudio()" aria-label="Звук">
+    <span id="soundIcon">🔈</span>
+  </button>
+</header>
+
+<div class="hint" id="hint"></div>
+
+<main>
+  <section class="stage active" id="stage-intro">
+    <div class="intro">
+      <div class="eyebrow">холод · только для тебя</div>
+      <h1>
+        Здесь замёрз один бутон
+        <span class="hand">согрей его</span>
+      </h1>
+      <p class="sub">
+        Тёплое дыхание раскроет то, что внутри.<br>
+        Или просто держи палец — тоже сработает.
+      </p>
+      <button class="cta" onclick="openMicModal()">
+        Начать <span class="arrow">→</span>
+      </button>
+    </div>
+  </section>
+
+  <section class="stage" id="stage-bloom">
+    <div class="lines" id="lines"></div>
+    <div class="dots" id="dots"></div>
+  </section>
+
+  <section class="stage" id="stage-letter">
+    <div class="letter">
+      <div class="letter-eyebrow">раскрылось</div>
+      <div class="letter-text">
+        <p>Есть цветы, которые раскрываются только от тепла. Ты — из таких.</p>
+        <p>Пока ты читаешь это — где-то между нами уже целая поляна. И вся она — ты.</p>
+        <p>Пусть между нами километры — ты всё равно ближе всех. Спасибо за то, какая ты.</p>
+      </div>
+      <div class="letter-sign">— твой</div>
+      <div class="letter-actions">
+        <div class="row">
+          <button class="btn-dark" onclick="shareIt()">Поделиться ✦</button>
+          <button class="btn-light" onclick="saveIt()">Сохранить</button>
+        </div>
+        <button class="btn-light" style="flex:none;" onclick="restartAll()">↺ Ещё раз</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Mic modal -->
+<div class="modal" id="micModal">
+  <div class="modal-card" id="micModalCard">
+    <div class="eyebrow">разрешение</div>
+    <h3>Позволишь мне<br>услышать твоё дыхание?</h3>
+    <p>Чтобы бутон согрелся — мне нужно слышать, как ты дуешь на него.</p>
+    <div class="small">
+      никаких записей · только живой звук<br>
+      микрофон не покидает твой телефон
+    </div>
+    <div class="modal-actions">
+      <button class="btn-solid" onclick="requestMic()">Разрешить микрофон</button>
+      <button class="btn-outline" onclick="enableFingerMode()">Держать палец</button>
+    </div>
+  </div>
+</div>
+
+<div class="save-overlay" id="saveOverlay">
+  <img id="saveImg" alt="">
+  <div class="tip">Удерживай картинку, чтобы сохранить в галерею</div>
+  <button class="close" onclick="closeSaveOverlay()">Закрыть</button>
+</div>
+
+<script>
+'use strict';
+
+/* ============================================================
+   ДАННЫЕ — здесь можно менять текст
+============================================================ */
+const LINES = [
+  'Ты появляешься —',
+  'и я забываю о холоде.',
+  'В тебе столько живого света,',
+  'что хочется остаться рядом.',
+  'Ты цветёшь — даже на расстоянии.',
+];
+
+/* ============================================================
+   КОНСТАНТЫ
+============================================================ */
+const RING_COUNT = 5;
+const PETALS_PER_RING = 6;
+
+const WARMTH_MAX = 4.5;
+const WARMTH_SPEED = 1.15;
+const WARMTH_DECAY = 0.10;
+
+// Пороги колец: 0 = внутреннее, 4 = внешнее. Внешние открываются первыми.
+const RING_THRESHOLD = [4.0, 3.25, 2.5, 1.75, 1.0];
+
+/* ============================================================
+   СОСТОЯНИЕ
+============================================================ */
+const state = {
+  stage: 1,          // 1 intro, 2 bloom, 3 letter
+  warmth: 0,
+  maxWarmth: 0,
+  holding: false,    // палец (в finger-режиме)
+  pointerX: 0,
+  pointerY: 0,
+  petalProgress: [0, 0, 0, 0, 0],
+  revealedByRing: [false, false, false, false, false],
+  revealedLines: 0,
+  finaleTriggered: false,
+  finaleTime: 0,
+};
+
+// Режим: 'mic' — дуновение, 'finger' — палец
+let inputMode = null;
+
+/* ============================================================
+   CANVAS
+============================================================ */
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+
+const rand = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+
+function smoothstep(edge0, edge1, x) {
+  const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = Math.floor(W * DPR);
+  canvas.height = Math.floor(H * DPR);
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  initDust();
+}
+
+/* ============================================================
+   ПЫЛЬ / СНЕЖИНКИ
+============================================================ */
+let dust = [];
+function initDust() {
+  dust = [];
+  const count = Math.max(15, Math.min(55, Math.floor((W * H) / 25000)));
+  for (let i = 0; i < count; i++) {
+    dust.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      vx: (Math.random() - 0.5) * 0.12,
+      vy: -0.05 - Math.random() * 0.18,
+      r: 0.4 + Math.random() * 1.5,
+      phase: Math.random() * Math.PI * 2,
+      age: Math.random() * 8,
+      maxAge: 7 + Math.random() * 9,
+    });
+  }
+}
+
+function updateDust(dt, t) {
+  for (const p of dust) {
+    p.age += dt;
+    p.x += p.vx + Math.sin(t * 0.5 + p.phase) * 0.06;
+    p.y += p.vy;
+
+    if (p.age > p.maxAge || p.y < -20) {
+      p.x = Math.random() * W;
+      p.y = H + 20;
+      p.age = 0;
+      p.maxAge = 7 + Math.random() * 9;
+    }
+  }
+}
+
+function drawDust() {
+  const flowerCx = W / 2;
+  const flowerCy = H * 0.36;
+  const warmthFactor = state.maxWarmth / WARMTH_MAX;
+
+  for (const p of dust) {
+    let a = 1;
+    if (p.age < 1) a = p.age;
+    else if (p.age > p.maxAge - 1.5) a = Math.max(0, (p.maxAge - p.age) / 1.5);
+    a *= 0.3 + 0.25 * Math.sin(performance.now() * 0.0008 + p.phase);
+
+    const dx = p.x - flowerCx;
+    const dy = p.y - flowerCy;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    const nearness = clamp(1 - d / (Math.min(W, H) * 0.45), 0, 1);
+    const warmthHere = warmthFactor * nearness;
+
+    const hue = lerp(200, 38, warmthHere);
+    const sat = lerp(35, 70, warmthHere);
+
+    const size = p.r * 6;
+    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, size);
+    g.addColorStop(0, `hsla(${hue}, ${sat}%, 82%, ${a})`);
+    g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/* ============================================================
+   ЧАСТИЦЫ ДЫХАНИЯ
+============================================================ */
+let breathParticles = [];
+let breathParticleAccumulator = 0;
+
+function spawnBreathParticle(intensity) {
+  // Верхняя часть экрана, широкая зона
+  const startX = W / 2 + (Math.random() - 0.5) * W * 0.55;
+  const startY = -10;
+  breathParticles.push({
+    x: startX,
+    y: startY,
+    vx: (W / 2 - startX) * 0.0015 + (Math.random() - 0.5) * 0.3,
+    vy: 0.8 + Math.random() * 0.6 + intensity * 0.5,
+    r: 0.8 + Math.random() * 1.6,
+    life: 1,
+    decay: 0.004 + Math.random() * 0.004,
+    hue: 30 + Math.random() * 20,
+    wobble: Math.random() * Math.PI * 2,
+  });
+}
+
+function updateBreathParticles(dt, t) {
+  for (let i = breathParticles.length - 1; i >= 0; i--) {
+    const p = breathParticles[i];
+    p.wobble += dt * 1.5;
+    p.x += p.vx + Math.sin(p.wobble) * 0.4;
+    p.y += p.vy;
+    p.vy += 0.012;
+    p.life -= p.decay;
+
+    // Растворяется у цветка
+    const dx = p.x - W / 2;
+    const dy = p.y - H * 0.36;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < 90) {
+      p.life -= 0.04;
+    }
+
+    if (p.life <= 0 || p.y > H + 20) {
+      breathParticles.splice(i, 1);
+    }
+  }
+}
+
+function drawBreathParticles() {
+  for (const p of breathParticles) {
+    const size = p.r * 12 * p.life;
+    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, size);
+    g.addColorStop(0, `hsla(${p.hue}, 75%, 82%, ${0.5 * p.life})`);
+    g.addColorStop(0.5, `hsla(${p.hue}, 60%, 70%, ${0.2 * p.life})`);
+    g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/* ============================================================
+   ОБНОВЛЕНИЕ ТЕПЛА
+============================================================ */
+function updateWarmth(dt) {
+  if (state.stage !== 2) return;
+
+  // В mic-режиме тепло копится от дуновения,
+  // в finger-режиме — от удержания пальца.
+  const giving = (inputMode === 'mic' && breathState.isBreathing)
+              || (inputMode === 'finger' && state.holding);
+
+  if (giving) {
+    const intensity = inputMode === 'mic'
+      ? Math.min(1, Math.max(0.55, breathState.intensity))
+      : 1;
+    state.warmth = Math.min(WARMTH_MAX, state.warmth + WARMTH_SPEED * dt * intensity);
+    state.maxWarmth = Math.max(state.maxWarmth, state.warmth);
+  } else {
+    state.warmth = Math.max(0, state.warmth - WARMTH_DECAY * dt);
+  }
+}
+
+function updatePetals(dt) {
+  for (let r = 0; r < RING_COUNT; r++) {
+    const th = RING_THRESHOLD[r];
+    const target = smoothstep(th - 0.25, th + 0.12, state.maxWarmth);
+    state.petalProgress[r] += (target - state.petalProgress[r]) * Math.min(1, dt * 2.4);
+    if (state.petalProgress[r] > 0.995) state.petalProgress[r] = 1;
+    if (state.petalProgress[r] < 0.005) state.petalProgress[r] = 0;
+  }
+}
+
+function checkReveals() {
+  for (let r = RING_COUNT - 1; r >= 0; r--) {
+    if (!state.revealedByRing[r] && state.petalProgress[r] > 0.55) {
+      state.revealedByRing[r] = true;
+      const lineIdx = (RING_COUNT - 1) - r;
+      revealLine(lineIdx);
+    }
+  }
+}
+
+function checkFinale(now) {
+  if (state.finaleTriggered) return;
+  const allOpen = state.petalProgress.every(p => p > 0.95);
+  if (!allOpen) {
+    state.finaleTime = 0;
+    return;
+  }
+  if (state.finaleTime === 0) {
+    state.finaleTime = now;
+    return;
+  }
+  if (now - state.finaleTime > 2600) {
+    state.finaleTriggered = true;
+    triggerFinale();
+  }
+}
+
+/* ============================================================
+   РЕНДЕР ЦВЕТКА
+============================================================ */
+function petalPath(ctx2, bx, by, tx, ty, width) {
+  const dx = tx - bx;
+  const dy = ty - by;
+  const len = Math.hypot(dx, dy) || 0.001;
+  const nx = -dy / len;
+  const ny = dx / len;
+  const midX = bx + dx * 0.5;
+  const midY = by + dy * 0.5;
+
+  ctx2.beginPath();
+  ctx2.moveTo(bx, by);
+  ctx2.quadraticCurveTo(midX + nx * width, midY + ny * width, tx, ty);
+  ctx2.quadraticCurveTo(midX - nx * width, midY - ny * width, bx, by);
+  ctx2.closePath();
+}
+
+const WARM_HUE =   [38, 35, 32, 28, 25];
+const WARM_SAT =   [65, 60, 55, 50, 45];
+const WARM_LIGHT = [84, 84, 85, 86, 87];
+const COLD_HUE = 210, COLD_SAT = 22, COLD_LIGHT = 78;
+
+function drawFlower(now) {
+  const t = now * 0.001;
+  const cx = W / 2;
+  const cy = H * 0.36;
+  const maxR = Math.min(W * 0.30, H * 0.26);
+
+  const breathe = 1 + Math.sin(t * 0.55) * 0.012;
+  const coldness = 1 - state.maxWarmth / WARMTH_MAX;
+  const shakeAmt = coldness * 0.6;
+  const shake = Math.sin(t * 4.7) * shakeAmt;
+
+  ctx.save();
+  ctx.translate(cx + shake, cy);
+  ctx.scale(breathe, breathe);
+
+  // Тень
+  const shadowR = maxR * 0.9;
+  const shG = ctx.createRadialGradient(0, maxR * 0.55, 0, 0, maxR * 0.55, shadowR);
+  shG.addColorStop(0, 'rgba(0, 0, 0, 0.45)');
+  shG.addColorStop(0.6, 'rgba(0, 0, 0, 0.15)');
+  shG.addColorStop(1, 'transparent');
+  ctx.fillStyle = shG;
+  ctx.beginPath();
+  ctx.ellipse(0, maxR * 0.55, shadowR, shadowR * 0.28, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Холодное свечение
+  const coldGlow = (1 - state.maxWarmth / WARMTH_MAX) * 0.8;
+  if (coldGlow > 0.02) {
+    const g = ctx.createRadialGradient(0, 0, maxR * 0.3, 0, 0, maxR * 1.6);
+    g.addColorStop(0, `rgba(200, 218, 232, ${0.15 * coldGlow})`);
+    g.addColorStop(0.6, `rgba(180, 200, 220, ${0.08 * coldGlow})`);
+    g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, maxR * 1.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Тёплое свечение
+  const warmFactor = state.maxWarmth / WARMTH_MAX;
+  // Усиление во время дуновения
+  const breathBoost = (inputMode === 'mic' && breathState.isBreathing)
+    ? 1 + breathState.intensity * 0.4
+    : 1;
+
+  if (warmFactor > 0.02) {
+    const pulse = (0.85 + 0.15 * Math.sin(t * 1.4)) * breathBoost;
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, maxR * 1.7);
+    g.addColorStop(0, `rgba(238, 200, 138, ${0.22 * warmFactor * pulse})`);
+    g.addColorStop(0.55, `rgba(212, 167, 106, ${0.10 * warmFactor * pulse})`);
+    g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, maxR * 1.7, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  for (let r = 0; r < RING_COUNT; r++) {
+    drawRing(r, maxR, t);
+  }
+
+  drawHeart(maxR, t);
+
+  ctx.restore();
+}
+
+function drawRing(r, maxR, t) {
+  const p = state.petalProgress[r];
+  if (p < 0.005 && r < 4) return;
+
+  const petals = PETALS_PER_RING;
+  const ringOffset = r * (Math.PI / 12);
+
+  const closedLength = maxR * (0.13 + r * 0.024);
+  const closedWidth = maxR * 0.045;
+  const openBaseR = maxR * (0.05 + r * 0.035);
+  const openLength = maxR * (0.34 + r * 0.13);
+  const openWidth = maxR * (0.08 + r * 0.032);
+
+  const hue = lerp(COLD_HUE, WARM_HUE[r], p);
+  const sat = lerp(COLD_SAT, WARM_SAT[r], p);
+  const light = lerp(COLD_LIGHT, WARM_LIGHT[r], p);
+
+  for (let i = 0; i < petals; i++) {
+    const openAngle = (i / petals) * Math.PI * 2 - Math.PI / 2 + ringOffset;
+    const baseR = lerp(0, openBaseR, p);
+    const baseX = Math.cos(openAngle) * baseR;
+    const baseY = Math.sin(openAngle) * baseR;
+
+    const closedAngle = -Math.PI / 2 + (i - petals / 2) * 0.04;
+    const angle = lerpAngle(closedAngle, openAngle, p);
+
+    const len = lerp(closedLength, openLength, p);
+    const width = lerp(closedWidth, openWidth, p);
+
+    const tipX = baseX + Math.cos(angle) * len;
+    const tipY = baseY + Math.sin(angle) * len;
+
+    const coldShiver = (1 - p) * 0.6;
+    const shx = Math.sin(t * 5 + i * 1.7 + r * 0.9) * coldShiver;
+    const shy = Math.cos(t * 4.2 + i * 2.1 + r * 1.3) * coldShiver * 0.5;
+
+    const varH = Math.sin(i * 3.7 + r * 1.3) * 4;
+    const varL = Math.cos(i * 2.1 + r * 0.7) * 3;
+
+    ctx.save();
+    ctx.translate(shx, shy);
+
+    petalPath(ctx, baseX + 1.5, baseY + 1.5, tipX + 1.5, tipY + 1.5, width * 1.05);
+    ctx.fillStyle = `hsla(${hue}, ${sat}%, ${Math.max(0, light - 30)}%, 0.5)`;
+    ctx.fill();
+
+    petalPath(ctx, baseX, baseY, tipX, tipY, width);
+    const grad = ctx.createLinearGradient(baseX, baseY, tipX, tipY);
+    const baseHue = hue + varH;
+    const baseSat = sat;
+    const baseLight = light + varL;
+    grad.addColorStop(0, `hsla(${baseHue}, ${baseSat}%, ${baseLight - 12}%, 0.98)`);
+    grad.addColorStop(0.5, `hsla(${baseHue}, ${baseSat}%, ${baseLight}%, 1)`);
+    grad.addColorStop(1, `hsla(${baseHue}, ${baseSat}%, ${baseLight + 4}%, 1)`);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ctx.strokeStyle = `hsla(${baseHue}, ${baseSat}%, ${Math.max(0, baseLight - 25)}%, 0.35)`;
+    ctx.lineWidth = 0.7;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(baseX, baseY);
+    ctx.lineTo(tipX, tipY);
+    ctx.strokeStyle = `hsla(${baseHue}, ${baseSat + 10}%, ${Math.max(0, baseLight - 8)}%, ${0.15 * p})`;
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+
+    ctx.restore();
+  }
+}
+
+function drawHeart(maxR, t) {
+  const open = state.petalProgress[0];
+  if (open < 0.1) return;
+
+  const pulse = 0.85 + 0.15 * Math.sin(t * 1.8);
+  const r = maxR * 0.14 * open;
+
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 3);
+  g.addColorStop(0, `rgba(255, 245, 220, ${0.95 * open * pulse})`);
+  g.addColorStop(0.35, `rgba(238, 200, 138, ${0.6 * open * pulse})`);
+  g.addColorStop(0.7, `rgba(212, 167, 106, ${0.2 * open * pulse})`);
+  g.addColorStop(1, 'transparent');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = `rgba(255, 250, 235, ${open * pulse})`;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function lerpAngle(a, b, t) {
+  let diff = b - a;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  return a + diff * t;
+}
+
+/* ============================================================
+   ТЕПЛОВОЕ ПЯТНО (только в finger-режиме)
+============================================================ */
+function drawPointerGlow(t) {
+  if (inputMode !== 'finger') return;
+  if (!state.holding || state.stage !== 2) return;
+
+  const r = Math.min(W, H) * 0.22;
+  const g = ctx.createRadialGradient(
+    state.pointerX, state.pointerY, 0,
+    state.pointerX, state.pointerY, r
+  );
+  const pulse = 0.7 + 0.3 * Math.sin(t * 3);
+  g.addColorStop(0, `rgba(238, 200, 138, ${0.30 * pulse})`);
+  g.addColorStop(0.4, `rgba(212, 167, 106, ${0.14 * pulse})`);
+  g.addColorStop(1, 'transparent');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(state.pointerX, state.pointerY, r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/* ============================================================
+   ОСНОВНОЙ ЦИКЛ
+============================================================ */
+let lastFrame = 0;
+function loop(now) {
+  if (!lastFrame) lastFrame = now;
+  const dt = Math.min((now - lastFrame) / 1000, 0.05);
+  lastFrame = now;
+  const t = now * 0.001;
+
+  if (state.stage === 2) {
+    // 1. Детекция дыхания
+    if (inputMode === 'mic' && micReady && micCalibrated) {
+      updateBreathDetection(now);
+    }
+
+    // 2. Обновление тепла/лепестков
+    updateWarmth(dt);
+    updatePetals(dt);
+    checkReveals();
+    checkFinale(now);
+
+    // 3. Спавн частиц дыхания
+    if (inputMode === 'mic' && breathState.isBreathing) {
+      breathParticleAccumulator += dt * (25 + breathState.intensity * 45);
+      while (breathParticleAccumulator >= 1) {
+        spawnBreathParticle(breathState.intensity);
+        breathParticleAccumulator -= 1;
+      }
+    }
+  }
+
+  updateDust(dt, t);
+  updateBreathParticles(dt, t);
+
+  // Рендер
+  ctx.clearRect(0, 0, W, H);
+
+  drawDust();
+  drawBreathParticles();
+
+  if (state.stage >= 2) {
+    drawFlower(now);
+    drawPointerGlow(t);
+  }
+
+  requestAnimationFrame(loop);
+}
+
+/* ============================================================
+   МИКРОФОН — ДЕТЕКЦИЯ ДУНОВЕНИЯ
+============================================================ */
+let audioCtx = null;
+let micStream = null;
+let micAnalyser = null;
+let micData = null;
+let micThreshold = 50;
+let micReady = false;
+let micCalibrated = false;
+
+const breathState = {
+  isBreathing: false,
+  breathStart: 0,
+  intensity: 0,
+  lastAbove: 0,
+  lastBelow: 0,
+};
+
+async function initMic() {
+  try {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AC();
+    }
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+      }
+    });
+
+    const source = audioCtx.createMediaStreamSource(micStream);
+
+    // Low-pass: оставляем только низкочастотный шум дыхания
+    const lowpass = audioCtx.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = 420;
+    lowpass.Q.value = 0.7;
+
+    // High-pass: убираем инфразвук от шагов / сквозняка
+    const highpass = audioCtx.createBiquadFilter();
+    highpass.type = 'highpass';
+    highpass.frequency.value = 40;
+    highpass.Q.value = 0.7;
+
+    micAnalyser = audioCtx.createAnalyser();
+    micAnalyser.fftSize = 1024;
+    micAnalyser.smoothingTimeConstant = 0.55;
+    micData = new Uint8Array(micAnalyser.frequencyBinCount);
+
+    source.connect(highpass);
+    highpass.connect(lowpass);
+    lowpass.connect(micAnalyser);
+    // analyser НЕ подключаем к destination
+
+    micReady = true;
+    return true;
+  } catch (e) {
+    console.warn('Mic init failed:', e);
+    return false;
+  }
+}
+
+async function calibrateMic() {
+  return new Promise(resolve => {
+    const samples = [];
+    const startedAt = performance.now();
+
+    function collect() {
+      micAnalyser.getByteFrequencyData(micData);
+      // Усредняем низкочастотный диапазон (0–430 Гц)
+      let sum = 0;
+      for (let i = 0; i < 10; i++) sum += micData[i];
+      samples.push(sum / 10);
+
+      if (performance.now() - startedAt < 1500) {
+        requestAnimationFrame(collect);
+      } else {
+        const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+        micThreshold = Math.max(38, Math.min(110, avg * 2.3 + 18));
+        micCalibrated = true;
+        console.log('[mic] threshold =', micThreshold.toFixed(1));
+        resolve();
+      }
+    }
+    collect();
+  });
+}
+
+function getLowFreqEnergy() {
+  if (!micAnalyser) return 0;
+  micAnalyser.getByteFrequencyData(micData);
+  let sum = 0;
+  for (let i = 0; i < 10; i++) sum += micData[i];
+  return sum / 10;
+}
+
+function updateBreathDetection(now) {
+  const energy = getLowFreqEnergy();
+  const above = energy > micThreshold;
+
+  // Гистерезис: чтобы не дёргалось на границе
+  if (above) {
+    breathState.lastAbove = now;
+  } else {
+    breathState.lastBelow = now;
+  }
+
+  // Начало дыхания: держится выше порога >200мс
+  if (!breathState.isBreathing) {
+    if (above && now - breathState.lastBelow > 100) {
+      // Проверим, что выше порога уже прилично времени
+      if (breathState.breathStart === 0) breathState.breathStart = now;
+      if (now - breathState.breathStart > 200) {
+        breathState.isBreathing = true;
+        setMicIndicator(true);
+      }
+    } else {
+      breathState.breathStart = 0;
+    }
+  } else {
+    // Конец дыхания: упало ниже порога >180мс
+    if (!above && now - breathState.lastAbove > 180) {
+      breathState.isBreathing = false;
+      breathState.breathStart = 0;
+      breathState.intensity = 0;
+      setMicIndicator(false);
+    }
+  }
+
+  // Интенсивность (0..1) — насколько выше порога
+  if (breathState.isBreathing) {
+    const over = Math.max(0, energy - micThreshold);
+    breathState.intensity = clamp(over / 45, 0, 1);
+  }
+
+  // Визуальная индикация в HUD
+  if (micIndicatorEl && micIndicatorEl.style.display !== 'none') {
+    const dot = micIndicatorEl.querySelector('.dot');
+    const active = breathState.isBreathing;
+    micIndicatorEl.classList.toggle('active', active);
+    if (!active) {
+      // мягкое свечение от энергии даже без активного дыхания
+      const idle = clamp((energy - micThreshold * 0.6) / 40, 0, 1);
+      dot.style.opacity = 0.4 + idle * 0.6;
+    } else {
+      dot.style.opacity = 1;
+    }
+  }
+}
+
+let micIndicatorEl = null;
+function setMicIndicator(active) {
+  if (!micIndicatorEl) return;
+  micIndicatorEl.classList.toggle('active', active);
+}
+
+/* ============================================================
+   ПОЙНТЕР
+============================================================ */
+function setPointerFromEvent(e) {
+  const t = e.touches ? e.touches[0] : e;
+  if (!t) return;
+  state.pointerX = t.clientX;
+  state.pointerY = t.clientY;
+}
+
+window.addEventListener('pointerdown', e => {
+  if (state.stage !== 2) return;
+  if (inputMode !== 'finger') return;
+  if (e.target.closest('button, .letter, .save-overlay, .hud, a')) return;
+  setPointerFromEvent(e);
+  state.holding = true;
+  hideHint();
+}, { passive: true });
+
+window.addEventListener('pointermove', e => {
+  if (inputMode === 'finger') setPointerFromEvent(e);
+}, { passive: true });
+
+window.addEventListener('pointerup', () => {
+  if (inputMode === 'finger') state.holding = false;
+});
+window.addEventListener('pointercancel', () => {
+  if (inputMode === 'finger') state.holding = false;
+});
+
+/* ============================================================
+   HINT
+============================================================ */
+let hintTimer = null;
+function showHint(text, keep = false) {
+  const h = document.getElementById('hint');
+  h.innerHTML = text;
+  h.classList.add('visible');
+  if (hintTimer) clearTimeout(hintTimer);
+  if (!keep) hintTimer = setTimeout(() => h.classList.remove('visible'), 4800);
+}
+function hideHint() {
+  document.getElementById('hint').classList.remove('visible');
+  if (hintTimer) clearTimeout(hintTimer);
+}
+
+/* ============================================================
+   СТРОКИ
+============================================================ */
+function revealLine(idx) {
+  if (idx < 0 || idx >= LINES.length) return;
+
+  const container = document.getElementById('lines');
+  const el = container.querySelectorAll('.line')[idx];
+  if (!el) return;
+
+  el.classList.add('revealed');
+  if (idx === LINES.length - 1) el.classList.add('final');
+
+  const dots = document.querySelectorAll('.dots .dot');
+  if (dots[idx]) dots[idx].classList.add('lit');
+
+  playTone(392 + idx * 55, 'sine', 1.6, 0.045);
+
+  state.revealedLines++;
+
+  if (state.revealedLines < LINES.length) {
+    const left = LINES.length - state.revealedLines;
+    const text = inputMode === 'mic'
+      ? `Дыхни ещё · осталось ${left}`
+      : `Согрей ещё · осталось ${left}`;
+    setTimeout(() => showHint(text), 1200);
+  }
+}
+
+/* ============================================================
+   ФИНАЛ
+============================================================ */
+function triggerFinale() {
+  showHint('Раскрылся ✦', true);
+  playTone(587.33, 'triangle', 2.4, 0.06);
+  setTimeout(() => playTone(880, 'triangle', 2.6, 0.05), 200);
+  setTimeout(() => playTone(1174.66, 'triangle', 2.6, 0.045), 400);
+
+  setTimeout(() => {
+    state.stage = 3;
+    document.getElementById('stage-bloom').classList.remove('active');
+    document.getElementById('hud').classList.remove('visible');
+    hideHint();
+    // Отключаем микрофон
+    if (micStream) {
+      micStream.getTracks().forEach(t => t.stop());
+      micStream = null;
+    }
+    setTimeout(() => {
+      document.getElementById('stage-letter').classList.add('active');
+    }, 400);
+  }, 1800);
+}
+
+/* ============================================================
+   МОДАЛКА РАЗРЕШЕНИЯ
+============================================================ */
+function openMicModal() {
+  document.getElementById('micModal').classList.add('open');
+}
+
+function closeMicModal() {
+  document.getElementById('micModal').classList.remove('open');
+}
+
+async function requestMic() {
+  initAudio();
+  if (muted) toggleAudio();
+
+  // Показываем состояние калибровки вместо карточки
+  const card = document.getElementById('micModalCard');
+  card.innerHTML = `
+    <div class="modal-calibration">
+      <div class="calib-ring"></div>
+      <div class="calib-text">Слушаю тишину вокруг…<br>и настраиваюсь на тебя</div>
+    </div>
+  `;
+
+  const ok = await initMic();
+
+  if (!ok) {
+    // Отказ или ошибка — тихо переходим в finger
+    closeMicModal();
+    setTimeout(() => enableFingerMode(), 200);
+    return;
+  }
+
+  // Калибруемся
+  await calibrateMic();
+
+  // Готово — закрываем и стартуем
+  closeMicModal();
+  await startBloom('mic');
+
+  // Показываем индикатор микрофона
+  micIndicatorEl = document.getElementById('micIndicator');
+  micIndicatorEl.style.display = 'inline-flex';
+
+  showHint('Дыхни на бутон — я слушаю', true);
+}
+
+function enableFingerMode() {
+  closeMicModal();
+  initAudio();
+  if (muted) toggleAudio();
+
+  if (state.stage !== 2) {
+    startBloom('finger').then(() => {
+      showHint('Держи палец — согреешь его', true);
+    });
+  } else {
+    inputMode = 'finger';
+    showHint('Держи палец — согреешь его', true);
+  }
+}
+
+/* ============================================================
+   СТАРТ
+============================================================ */
+async function startBloom(mode) {
+  inputMode = mode;
+
+  // Строки
+  const container = document.getElementById('lines');
+  container.innerHTML = '';
+  LINES.forEach(() => {
+    const el = document.createElement('div');
+    el.className = 'line';
+    container.appendChild(el);
+  });
+
+  // Точки
+  const dots = document.getElementById('dots');
+  dots.innerHTML = '';
+  LINES.forEach(() => {
+    const d = document.createElement('div');
+    d.className = 'dot';
+    dots.appendChild(d);
+  });
+
+  document.getElementById('stage-intro').classList.remove('active');
+  document.getElementById('hud').classList.add('visible');
+  document.getElementById('bgWarm').classList.add('visible');
+
+  await new Promise(r => setTimeout(r, 700));
+  state.stage = 2;
+  document.getElementById('stage-bloom').classList.add('active');
+  setTimeout(() => dots.classList.add('visible'), 600);
+}
+
+/* ============================================================
+   ЗВУК (ambient tones)
+============================================================ */
+let muted = true;
+let ambientTimer = null;
+
+function initAudio() {
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AC();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playTone(freq, type = 'sine', dur = 1.0, vol = 0.05) {
+  if (muted || !audioCtx) return;
+  try {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(vol, audioCtx.currentTime + 0.18);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+    o.connect(g).connect(audioCtx.destination);
+    o.start();
+    o.stop(audioCtx.currentTime + dur + 0.05);
+  } catch (e) {}
+}
+
+function playAmbient() {
+  if (muted) return;
+  [146.83, 196.00, 246.94].forEach((f, i) => {
+    setTimeout(() => playTone(f, 'triangle', 5.0, 0.012), i * 420);
+  });
+}
+
+function toggleAudio() {
+  initAudio();
+  muted = !muted;
+  const icon = document.getElementById('soundIcon');
+  const brand = document.getElementById('brand');
+  if (!muted) {
+    icon.textContent = '🔊';
+    brand.classList.add('warm');
+    playAmbient();
+    if (!ambientTimer) ambientTimer = setInterval(playAmbient, 11000);
+  } else {
+    icon.textContent = '🔈';
+    brand.classList.remove('warm');
+    if (ambientTimer) { clearInterval(ambientTimer); ambientTimer = null; }
+  }
+}
+
+/* ============================================================
+   ЭКСПОРТ / SHARE / SAVE
+============================================================ */
+function renderExportCanvas() {
+  const ew = 1080;
+  const eh = 1620;
+  const ec = document.createElement('canvas');
+  ec.width = ew;
+  ec.height = eh;
+  const ectx = ec.getContext('2d');
+
+  const bg = ectx.createLinearGradient(0, 0, 0, eh);
+  bg.addColorStop(0, '#050810');
+  bg.addColorStop(0.55, '#0a0a14');
+  bg.addColorStop(1, '#1a1216');
+  ectx.fillStyle = bg;
+  ectx.fillRect(0, 0, ew, eh);
+
+  const warm = ectx.createRadialGradient(ew / 2, eh * 0.7, 0, ew / 2, eh * 0.7, ew * 0.9);
+  warm.addColorStop(0, 'rgba(120, 70, 40, 0.35)');
+  warm.addColorStop(1, 'transparent');
+  ectx.fillStyle = warm;
+  ectx.fillRect(0, 0, ew, eh);
+
+  for (let i = 0; i < 140; i++) {
+    const x = Math.random() * ew;
+    const y = Math.random() * eh * 0.9;
+    const r = Math.random() * 1.4 + 0.3;
+    ectx.globalAlpha = 0.15 + Math.random() * 0.4;
+    ectx.fillStyle = Math.random() < 0.7 ? '#eec88a' : '#ede4d2';
+    ectx.beginPath();
+    ectx.arc(x, y, r, 0, Math.PI * 2);
+    ectx.fill();
+  }
+  ectx.globalAlpha = 1;
+
+  const flowerCx = ew / 2;
+  const flowerCy = eh * 0.34;
+  const maxR = 300;
+
+  const halo = ectx.createRadialGradient(flowerCx, flowerCy, 0, flowerCx, flowerCy, maxR * 2);
+  halo.addColorStop(0, 'rgba(238, 200, 138, 0.30)');
+  halo.addColorStop(0.5, 'rgba(212, 167, 106, 0.12)');
+  halo.addColorStop(1, 'transparent');
+  ectx.fillStyle = halo;
+  ectx.beginPath();
+  ectx.arc(flowerCx, flowerCy, maxR * 2, 0, Math.PI * 2);
+  ectx.fill();
+
+  for (let r = 0; r < RING_COUNT; r++) {
+    drawRingTo(ectx, flowerCx, flowerCy, r, maxR, performance.now() * 0.001);
+  }
+
+  const coreG = ectx.createRadialGradient(flowerCx, flowerCy, 0, flowerCx, flowerCy, maxR * 0.42);
+  coreG.addColorStop(0, 'rgba(255, 245, 220, 0.95)');
+  coreG.addColorStop(0.4, 'rgba(238, 200, 138, 0.65)');
+  coreG.addColorStop(1, 'transparent');
+  ectx.fillStyle = coreG;
+  ectx.beginPath();
+  ectx.arc(flowerCx, flowerCy, maxR * 0.42, 0, Math.PI * 2);
+  ectx.fill();
+
+  ectx.textAlign = 'center';
+  ectx.textBaseline = 'middle';
+  const lineHeight = 52;
+  const totalH = LINES.length * lineHeight;
+  const startY = eh * 0.72 - totalH / 2 + lineHeight / 2;
+
+  LINES.forEach((line, i) => {
+    const isFinal = i === LINES.length - 1;
+    const size = isFinal ? 34 : 30;
+    ectx.font = `italic 400 ${size}px 'Cormorant Garamond', Georgia, serif`;
+    if (isFinal) {
+      ectx.shadowColor = 'rgba(238, 200, 138, 0.7)';
+      ectx.shadowBlur = 30;
+      ectx.fillStyle = '#eec88a';
+    } else {
+      ectx.shadowColor = 'rgba(212, 167, 106, 0.25)';
+      ectx.shadowBlur = 12;
+      ectx.fillStyle = 'rgba(237, 228, 210, 0.94)';
+    }
+    ectx.fillText(line, ew / 2, startY + i * lineHeight);
+  });
+  ectx.shadowBlur = 0;
+
+  ectx.font = `300 20px 'JetBrains Mono', monospace`;
+  ectx.fillStyle = 'rgba(237, 228, 210, 0.4)';
+  ectx.fillText('РАСКРЫЛОСЬ · ' + new Date().getFullYear(), ew / 2, eh - 180);
+
+  ectx.font = `700 62px 'Caveat', cursive`;
+  ectx.fillStyle = '#d4a76a';
+  ectx.fillText('— твой', ew / 2, eh - 100);
+
+  return ec;
+}
+
+function drawRingTo(ectx, cx, cy, r, maxR, t) {
+  const petals = PETALS_PER_RING;
+  const ringOffset = r * (Math.PI / 12);
+
+  const openBaseR = maxR * (0.05 + r * 0.035);
+  const openLength = maxR * (0.34 + r * 0.13);
+  const openWidth = maxR * (0.08 + r * 0.032);
+
+  const hue = WARM_HUE[r];
+  const sat = WARM_SAT[r];
+  const light = WARM_LIGHT[r];
+
+  for (let i = 0; i < petals; i++) {
+    const angle = (i / petals) * Math.PI * 2 - Math.PI / 2 + ringOffset;
+    const baseX = cx + Math.cos(angle) * openBaseR;
+    const baseY = cy + Math.sin(angle) * openBaseR;
+    const tipX = baseX + Math.cos(angle) * openLength;
+    const tipY = baseY + Math.sin(angle) * openLength;
+
+    const varH = Math.sin(i * 3.7 + r * 1.3) * 4;
+    const varL = Math.cos(i * 2.1 + r * 0.7) * 3;
+
+    petalPath(ectx, baseX + 2, baseY + 2, tipX + 2, tipY + 2, openWidth * 1.05);
+    ectx.fillStyle = `hsla(${hue}, ${sat}%, ${Math.max(0, light - 30)}%, 0.5)`;
+    ectx.fill();
+
+    petalPath(ectx, baseX, baseY, tipX, tipY, openWidth);
+    const grad = ectx.createLinearGradient(baseX, baseY, tipX, tipY);
+    const bh = hue + varH;
+    const bl = light + varL;
+    grad.addColorStop(0, `hsla(${bh}, ${sat}%, ${bl - 12}%, 0.98)`);
+    grad.addColorStop(0.5, `hsla(${bh}, ${sat}%, ${bl}%, 1)`);
+    grad.addColorStop(1, `hsla(${bh}, ${sat}%, ${bl + 4}%, 1)`);
+    ectx.fillStyle = grad;
+    ectx.fill();
+
+    ectx.strokeStyle = `hsla(${bh}, ${sat}%, ${Math.max(0, bl - 25)}%, 0.35)`;
+    ectx.lineWidth = 1.2;
+    ectx.stroke();
+  }
+}
+
+async function shareIt() {
+  const ec = renderExportCanvas();
+  if (window.vkBridge) {
+    try {
+      const dataUrl = ec.toDataURL('image/png');
+      await vkBridge.send('VKWebAppShowStoryBox', {
+        background_type: 'image',
+        url: dataUrl,
+        stickers: [{
+          sticker_type: 'renderable',
+          sticker: {
+            content_type: 'image',
+            url: dataUrl,
+            clickable_zones: [],
+          },
+        }],
+      });
+      return;
+    } catch (e) {
+      console.warn('VK Bridge error:', e);
+    }
+  }
+  if (navigator.share) {
+    try {
+      const blob = await new Promise(res => ec.toBlob(res, 'image/png'));
+      const file = new File([blob], 'для-тебя.png', { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Для тебя',
+          text: 'Раскрылось ✦',
+        });
+        return;
+      }
+    } catch (e) {
+      console.warn('Web Share error:', e);
+    }
+  }
+  saveIt();
+}
+
+function saveIt() {
+  const ec = renderExportCanvas();
+  const dataUrl = ec.toDataURL('image/png');
+  if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
+    document.getElementById('saveImg').src = dataUrl;
+    document.getElementById('saveOverlay').classList.add('open');
+  } else {
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = 'для-тебя.png';
+    a.click();
+  }
+}
+
+function closeSaveOverlay() {
+  document.getElementById('saveOverlay').classList.remove('open');
+}
+
+/* ============================================================
+   РЕСТАРТ
+============================================================ */
+function restartAll() {
+  state.stage = 1;
+  state.warmth = 0;
+  state.maxWarmth = 0;
+  state.holding = false;
+  state.petalProgress = [0, 0, 0, 0, 0];
+  state.revealedByRing = [false, false, false, false, false];
+  state.revealedLines = 0;
+  state.finaleTriggered = false;
+  state.finaleTime = 0;
+
+  breathState.isBreathing = false;
+  breathState.breathStart = 0;
+  breathState.intensity = 0;
+  breathParticles = [];
+  breathParticleAccumulator = 0;
+
+  if (micStream) {
+    micStream.getTracks().forEach(t => t.stop());
+    micStream = null;
+  }
+  micReady = false;
+  micCalibrated = false;
+  inputMode = null;
+
+  // Восстанавливаем карточку модалки
+  const card = document.getElementById('micModalCard');
+  card.innerHTML = `
+    <div class="eyebrow">разрешение</div>
+    <h3>Позволишь мне<br>услышать твоё дыхание?</h3>
+    <p>Чтобы бутон согрелся — мне нужно слышать, как ты дуешь на него.</p>
+    <div class="small">
+      никаких записей · только живой звук<br>
+      микрофон не покидает твой телефон
+    </div>
+    <div class="modal-actions">
+      <button class="btn-solid" onclick="requestMic()">Разрешить микрофон</button>
+      <button class="btn-outline" onclick="enableFingerMode()">Держать палец</button>
+    </div>
+  `;
+
+  document.querySelectorAll('.line').forEach(l => l.classList.remove('revealed', 'final'));
+  document.querySelectorAll('.dots .dot').forEach(d => d.classList.remove('lit'));
+  document.getElementById('dots').classList.remove('visible');
+  document.getElementById('stage-bloom').classList.remove('active');
+  document.getElementById('stage-letter').classList.remove('active');
+  document.getElementById('hud').classList.remove('visible');
+  document.getElementById('bgWarm').classList.remove('visible');
+  if (micIndicatorEl) micIndicatorEl.style.display = 'none';
+  micIndicatorEl = null;
+  hideHint();
+
+  setTimeout(() => {
+    document.getElementById('stage-intro').classList.add('active');
+  }, 500);
+}
+
+/* ============================================================
+   ИНИЦИАЛИЗАЦИЯ
+============================================================ */
+resize();
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 250));
+
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => {
+    requestAnimationFrame(loop);
+  });
+} else {
+  setTimeout(() => requestAnimationFrame(loop), 300);
+}
+</script>
+</body>
+</html>
