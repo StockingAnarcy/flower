@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
-<title>Разбуди его</title>
+<title>Согрей его</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,400&family=Montserrat:wght@300;400;500&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
@@ -671,17 +671,17 @@ main {
 <main>
   <section class="stage active" id="stage-intro">
     <div class="intro">
-      <div class="eyebrow">холод · только для тебя</div>
+      <div class="eyebrow">только для тебя</div>
       <h1>
         Здесь замёрз один бутон
         <span class="hand">согрей его</span>
       </h1>
       <p class="sub">
         Тёплое дыхание раскроет то, что внутри.<br>
-        Или просто держи палец — тоже сработает.
+        Если стесняешься — просто держи палец.
       </p>
       <button class="cta" onclick="openMicModal()">
-        Начать <span class="arrow">→</span>
+        Согреть <span class="arrow">→</span>
       </button>
     </div>
   </section>
@@ -693,17 +693,17 @@ main {
 
   <section class="stage" id="stage-letter">
     <div class="letter">
-      <div class="letter-eyebrow">раскрылось</div>
+      <div class="letter-eyebrow">согрет</div>
       <div class="letter-text">
-        <p>Есть цветы, которые раскрываются только от тепла. Ты — из таких.</p>
-        <p>Пока ты читаешь это — где-то между нами уже целая поляна. И вся она — ты.</p>
-        <p>Пусть между нами километры — ты всё равно ближе всех. Спасибо за то, какая ты.</p>
+        <p>Этот бутон раскрылся от твоего тепла.</p>
+        <p>Надеюсь, тебе было приятно им поделиться.</p>
+        <p>Хоть между нами расстояние — я тоже его почувствовал. Спасибо за то, какая ты.</p>
       </div>
-      <div class="letter-sign">— твой</div>
+      <div class="letter-sign">— твой В. </div>
       <div class="letter-actions">
         <div class="row">
-          <button class="btn-dark" onclick="shareIt()">Поделиться ✦</button>
-          <button class="btn-light" onclick="saveIt()">Сохранить</button>
+          <!--<button class="btn-dark" onclick="shareIt()">Поделиться ✦</button>--!>
+          <button class="btn-dark" onclick="saveIt()">Сохранить ✦</button>
         </div>
         <button class="btn-light" style="flex:none;" onclick="restartAll()">↺ Ещё раз</button>
       </div>
@@ -716,10 +716,10 @@ main {
   <div class="modal-card" id="micModalCard">
     <div class="eyebrow">разрешение</div>
     <h3>Позволишь мне<br>услышать твоё дыхание?</h3>
-    <p>Чтобы бутон согрелся — мне нужно слышать, как ты дуешь на него.</p>
+    <p>Чтобы бутон согрелся — нужно слышать, как ты дуешь на него.</p>
     <div class="small">
       никаких записей · только живой звук<br>
-      микрофон не покидает твой телефон
+      поделись своим теплом
     </div>
     <div class="modal-actions">
       <button class="btn-solid" onclick="requestMic()">Разрешить микрофон</button>
@@ -741,11 +741,11 @@ main {
    ДАННЫЕ — здесь можно менять текст
 ============================================================ */
 const LINES = [
-  'Ты появляешься —',
-  'и я забываю о холоде.',
-  'В тебе столько живого света,',
-  'что хочется остаться рядом.',
-  'Ты цветёшь — даже на расстоянии.',
+  'Цветы мои! Не всякий мог',
+  'Узнать, что сердцем я продрог.',
+  'Не всякий этот холод в нем',
+  'Мог растопить своим огнем.',
+  'Ты — смогла.',
 ];
 
 /* ============================================================
@@ -1489,7 +1489,7 @@ function revealLine(idx) {
   if (state.revealedLines < LINES.length) {
     const left = LINES.length - state.revealedLines;
     const text = inputMode === 'mic'
-      ? `Дыхни ещё · осталось ${left}`
+      ? `Подуй ещё · осталось ${left}`
       : `Согрей ещё · осталось ${left}`;
     setTimeout(() => showHint(text), 1200);
   }
@@ -1499,7 +1499,7 @@ function revealLine(idx) {
    ФИНАЛ
 ============================================================ */
 function triggerFinale() {
-  showHint('Раскрылся ✦', true);
+  showHint('Согрелся ✦', true);
   playTone(587.33, 'triangle', 2.4, 0.06);
   setTimeout(() => playTone(880, 'triangle', 2.6, 0.05), 200);
   setTimeout(() => playTone(1174.66, 'triangle', 2.6, 0.045), 400);
@@ -1564,7 +1564,7 @@ async function requestMic() {
   micIndicatorEl = document.getElementById('micIndicator');
   micIndicatorEl.style.display = 'inline-flex';
 
-  showHint('Дыхни на бутон — я слушаю', true);
+  showHint('Подуй на бутон — я слушаю', true);
 }
 
 function enableFingerMode() {
@@ -1574,11 +1574,11 @@ function enableFingerMode() {
 
   if (state.stage !== 2) {
     startBloom('finger').then(() => {
-      showHint('Держи палец — согреешь его', true);
+      showHint('Держи палец — станет теплее', true);
     });
   } else {
     inputMode = 'finger';
-    showHint('Держи палец — согреешь его', true);
+    showHint('Держи палец — станет теплее', true);
   }
 }
 
@@ -1757,11 +1757,11 @@ function renderExportCanvas() {
 
   ectx.font = `300 20px 'JetBrains Mono', monospace`;
   ectx.fillStyle = 'rgba(237, 228, 210, 0.4)';
-  ectx.fillText('РАСКРЫЛОСЬ · ' + new Date().getFullYear(), ew / 2, eh - 180);
+  ectx.fillText('СОГРЕТ · ' + new Date().getFullYear(), ew / 2, eh - 180);
 
   ectx.font = `700 62px 'Caveat', cursive`;
   ectx.fillStyle = '#d4a76a';
-  ectx.fillText('— твой', ew / 2, eh - 100);
+  ectx.fillText('— твой В.', ew / 2, eh - 100);
 
   return ec;
 }
@@ -1838,7 +1838,7 @@ async function shareIt() {
         await navigator.share({
           files: [file],
           title: 'Для тебя',
-          text: 'Раскрылось ✦',
+          text: 'Согрет ✦',
         });
         return;
       }
@@ -1903,7 +1903,6 @@ function restartAll() {
     <p>Чтобы бутон согрелся — мне нужно слышать, как ты дуешь на него.</p>
     <div class="small">
       никаких записей · только живой звук<br>
-      микрофон не покидает твой телефон
     </div>
     <div class="modal-actions">
       <button class="btn-solid" onclick="requestMic()">Разрешить микрофон</button>
